@@ -4,10 +4,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-db_file_path = os.path.join(os.path.dirname(__file__), 'database', 'bot.db')
+db_file_path = os.path.join(os.path.dirname(__file__), '', 'bot.db')
 conn = sqlite3.connect(db_file_path)
 
-if not os.path.exists(db_file_path):
+if os.path.exists(db_file_path):
     conn = sqlite3.connect(db_file_path)
     cursor = conn.cursor()
 
