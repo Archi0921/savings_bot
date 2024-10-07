@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS "user" (
 	"id"	INTEGER,
-	"tg_user_id"	INTEGER,
+	"tg_user_id"	INTEGER UNIQUE,
 	"username"	VARCHAR(255),
 	PRIMARY KEY("id" AUTOINCREMENT)
 );
