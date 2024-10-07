@@ -4,7 +4,6 @@ CREATE TABLE IF NOT EXISTS "user" (
 	"username"	VARCHAR(255),
 	PRIMARY KEY("id" AUTOINCREMENT)
 );
-
 CREATE TABLE IF NOT EXISTS "mission" (
 	"id"	INTEGER,
 	"user_id"	INTEGER,
@@ -18,7 +17,6 @@ CREATE TABLE IF NOT EXISTS "mission" (
 	PRIMARY KEY("id" AUTOINCREMENT),
 	CONSTRAINT "user_id" FOREIGN KEY("user_id") REFERENCES "user"("id")
 );
-
 CREATE TABLE IF NOT EXISTS "payment" (
 	"id"	INTEGER,
 	"mission_id"	INTEGER,
