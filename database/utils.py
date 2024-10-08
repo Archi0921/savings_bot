@@ -10,7 +10,7 @@ from models import Payment, User, Mission
 
 
 async def add_user(session: AsyncSession, tg_user_id: int, username: str) -> User:
-    user = await session.execute(select(User).filter((User.tg_user_id == tg_user_id).any_()))
+    user = await session.scalar(select(User).filter((User.tg_user_id == tg_user_id)))
 
     if (user == None):
         user = User(tg_user_id=tg_user_id, username=username)
