@@ -11,11 +11,11 @@ from models import Payment, User, Mission
 
 async def add_user(session: AsyncSession, tg_user_id: int, username: str) -> User:
     user = await session.execute(select(User).filter((User.tg_user_id == tg_user_id).any_()))
-    user = user if (user != None) else User(tg_user_id=tg_user_id, username=username)
+
     if (user == None):
         user = User(tg_user_id=tg_user_id, username=username)
         session.add(user)
-        session.commit()
+        await session.commit()
     return user
 
 
@@ -28,7 +28,7 @@ async def add_mission(session: AsyncSession, user: User, goal: str,
                       income=income, income_frequency=income_frequency,
                       period_payments=period_payments)
     session.add(mission)
-    session.commit()
+    await session.commit()
     return mission
 
 
@@ -64,5 +64,5 @@ async def add_payments(session: AsyncSession, mission: Mission, amount: int, cou
     for payment in payments:
         session.add(payment)
 
-    session.commit()
+    await session.commit()
 
