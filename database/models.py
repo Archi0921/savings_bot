@@ -21,11 +21,11 @@ class Mission(Base):
     __tablename__ = 'mission'
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey('user.id'))
-    goal = Column(String(255), default="")
-    total_amount = Column(Integer,default=0)
-    income = Column(Integer, default=0)
-    income_frequency = Column(Integer, default=0)
-    period_payments = Column(Integer, default=0)
+    goal = Column(String(255))
+    total_amount = Column(Integer)
+    income = Column(Integer)
+    income_frequency = Column(Integer)
+    period_payments = Column(Integer)
     date_created = Column(DateTime(), default=datetime.now)
     saved_amount = Column(Integer, default=0)
     __table_args__ = (
