@@ -13,6 +13,7 @@ API_TOKEN = os.getenv('TOKEN')
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
+
 async def main():
     register_handlers(dp)
     try:

@@ -1,6 +1,8 @@
+from .models import Base
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
+import logging
 
+logger = logging.getLogger(__name__)
 DATABASE_URL = "sqlite+aiosqlite:///./database/bot.db"
 
 engine = create_async_engine(DATABASE_URL, echo=True)
@@ -9,4 +11,9 @@ AsyncSessionLocal = async_sessionmaker(
     class_=AsyncSession,
     expire_on_commit=False
 )
-Base = declarative_base()
+
+
+async def init_db():
+    async with engine.begin() as conn:
+        logger.info('Создали бд')
+        await conn.run_sync(Base.metadata.create_all)
