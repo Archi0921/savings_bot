@@ -24,7 +24,6 @@ class Mission(Base):
     goal: Mapped[str] = mapped_column(String(255))
     total_amount: Mapped[int] = mapped_column(Integer)
     income: Mapped[int] = mapped_column(Integer)
-    income_frequency: Mapped[int] = mapped_column(Integer)
     period_payments: Mapped[int] = mapped_column(Integer)
     date_created: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     saved_amount: Mapped[int] = mapped_column(Integer, default=0)
