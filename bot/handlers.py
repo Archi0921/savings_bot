@@ -6,6 +6,8 @@ from aiogram.filters import Command, CommandStart
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
+from sqlalchemy.orm import selectinload
+
 from database.database import AsyncSessionLocal as async_session
 from database.models import *
 from database.utils import *
@@ -16,6 +18,7 @@ router = Router()
 
 def register_handlers(dp):
     dp.include_router(router)
+
 
 @asynccontextmanager
 async def get_session() -> AsyncSession:
@@ -30,7 +33,8 @@ async def cmd_start(message: Message):
     await message.answer(f'Привет! Это бот для накоплений.\n'
                          'Вам нужно ввести свою цель, сумму, дату, к которой нужно накопить и информацию о доходах\n'
                          'А я помогу вам рассчитать размер и частоту внесения для достижения цели\n'
-                         'Чтобы начать, отправьте команду /goal')
+                         'Чтобы начать, отправьте команду /goal\n'
+                         'Чтобы посмотреть список всех целей, введите /list\n')
 
 
 class UserMissionState(StatesGroup):
@@ -38,6 +42,10 @@ class UserMissionState(StatesGroup):
     total_amount = State()
     income = State()
     savings_percentage = State()
+
+
+class GoalSelectionState(StatesGroup):
+    goal_number = State()
 
 
 @router.message(Command('goal'))
@@ -74,7 +82,6 @@ async def total_amount_handler(message: Message, state: FSMContext):
         await state.set_state(UserMissionState.income)
     except ValueError:
         await message.answer('Пожалуйста, укажите сумму вашей цели числом:')
-
 
 
 @router.message(UserMissionState.income)
@@ -136,12 +143,75 @@ async def savings_percentage_handler(message: Message, state: FSMContext):
                 f"Месячный доход: {income}\n"
                 f"Процент откладывания: {savings_percentage}%\n"
                 f"Период накоплений: {period_payments} месяцев\n"
-                f"Ежемесячный взнос: {equal_payment}"
+                f"Ежемесячный взнос: {equal_payment}\n\n"
+                f"Чтобы посмотреть список всех целей, введите /list\n"
+                f"Чтобы добавить еще цель, введите /goal\n"
             )
 
             await state.clear()
         except ValueError:
             await message.answer('Процент дохода необходимо указать числом:')
+
+
+@router.message(Command('list'))
+async def goals_list_handler(message: Message, state: FSMContext):
+    async with (get_session() as session):
+        user_id = message.from_user.id
+        query = select(Mission).where(Mission.user_id == user_id)
+        result = await session.execute(query)
+
+        goals = result.scalars().all()
+# Проверить эту часть
+        if goals:
+            goals_list = [f'{idx + 1}. {goal.goal}' for idx, goal in enumerate(goals)]
+            goals_text = f'\n'.join(goals_list)
+
+            await message.answer(f'Вот список ваших целей:\n{goals_text}\n\n')
+            await message.answer('Введите номер цели, чтобы увидеть подробную информацию')
+            await state.set_state(GoalSelectionState.goal_number)
+        else:
+            await message.answer('У вас пока нет целей\n'
+                                 'Чтобы добавить цель введите команду /goal')
+            return
+
+
+@router.message(GoalSelectionState.goal_number)
+async def goal_details_handler(message: Message, state:FSMContext):
+    try:
+        number = int(message.text) - 1
+    except ValueError:
+        await message.answer('Пожалуйста, введите корректный номер цели')
+
+    async with get_session() as session:
+        user_id = message.from_user.id
+        goals = await session.execute(
+            select(Mission)
+            .where(Mission.user_id == user_id)
+            .options(selectinload(Mission.payments))
+        )
+        goals = goals.scalars().all()
+
+    if 0 <= number < len(goals):
+        selected_goal = goals[number]
+        payments = selected_goal.payments
+        goal_info = (
+            f"Цель: {selected_goal.goal}\n"
+            f"Необходимая сумма: {selected_goal.total_amount}\n"
+            f"Месячный доход: {selected_goal.income}\n"
+            f"Период накоплений: {selected_goal.period_payments} месяцев\n"
+        )
+        payment = payments[0]
+        goal_info += (f'Ежемесячный взнос: {payment.amount}\n\n'
+                      f'Вернуться к списку /list'
+                      )
+
+        await message.answer(goal_info)
+    else:
+        await message.answer('Неправильный номер целию Попробуйте снова')
+
+    await state.clear()
+
+
 
 #
 # @router.message(UserMissionState.period_payments)
