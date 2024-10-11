@@ -197,9 +197,9 @@ async def goal_details_handler(message: Message, state:FSMContext):
         goal_info = (
             f"Цель: {selected_goal.goal}\n"
             f"Необходимая сумма: {selected_goal.total_amount}\n"
+            f"Накопленная сумма: {selected_goal.saved_amount}\n"
             f"Месячный доход: {selected_goal.income}\n"
             f"Период накоплений: {selected_goal.period_payments} месяцев\n"
-            f"Количество внесенных платежей: {selected_goal.saved_amount}\n"
         )
         payment = payments[0]
         goal_info += (f'Ежемесячный взнос: {payment.amount}\n\n'
