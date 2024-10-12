@@ -1,9 +1,14 @@
 import logging
 import os
+
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
 from .handlers import register_handlers
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from dotenv import load_dotenv
+
+from .scheduler import set_scheduled_jobs
 
 load_dotenv()
 
@@ -16,8 +21,11 @@ dp = Dispatcher(storage=MemoryStorage())
 
 async def main():
     register_handlers(dp)
+    scheduler = AsyncIOScheduler()
+    set_scheduled_jobs(scheduler, bot)
     try:
         await bot.delete_webhook(drop_pending_updates=True)
+        scheduler.start()
         await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
     finally:
         await bot.session.close()
