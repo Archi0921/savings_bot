@@ -60,12 +60,6 @@ async def create_payments(session: AsyncSession, mission: Mission, period_paymen
         await session.commit()
         logger.info(f'Создали {len(payments)} платежей для миссии {mission.id}')
 
-async def get_mission_by_id(session: AsyncSession, id: int) -> Mission:
-    return await session.scalar(select(Mission).where(Mission.id == id))
-
-# async def get_user_by_id(session: AsyncSession, id: int) -> User:
-#     return await session.scalar(select(User).where(User.id == id))
-
 # async def add_payments(session: AsyncSession, mission: Mission, amount: int, count_payments_in_month: int):
 #     # для определения дней платежей считаем ddays - смещение относительно начала месяца
 #     count_payments_in_month = 4 if (count_payments_in_month > 4) else count_payments_in_month
