@@ -8,9 +8,9 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 from sqlalchemy.orm import selectinload
 
-from database.database import AsyncSessionLocal as async_session
-from database.models import *
-from database.utils import *
+from savings_bot.database.database import AsyncSessionLocal as async_session
+from savings_bot.database.models import *
+from savings_bot.database.utils import *
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -34,7 +34,8 @@ async def cmd_start(message: Message):
                          'Вам нужно ввести свою цель, сумму, дату, к которой нужно накопить и информацию о доходах\n'
                          'А я помогу вам рассчитать размер и частоту внесения для достижения цели\n'
                          'Чтобы начать, отправьте команду /goal\n'
-                         'Чтобы посмотреть список всех целей, введите /list\n')
+                         'Чтобы посмотреть список всех целей, введите /list\n'
+                         'Если вы хотите удалить цель, введите /delete\n')
 
 
 class UserMissionState(StatesGroup):
@@ -44,8 +45,9 @@ class UserMissionState(StatesGroup):
     savings_percentage = State()
 
 
-class GoalSelectionState(StatesGroup):
+class GoalManagementState(StatesGroup):
     goal_number = State()
+    confirm_goal = State()
 
 
 @router.message(Command('goal'))
@@ -157,61 +159,147 @@ async def savings_percentage_handler(message: Message, state: FSMContext):
 async def goals_list_handler(message: Message, state: FSMContext):
     async with (get_session() as session):
         user_id = message.from_user.id
-        query = select(Mission).where(Mission.user_id == user_id)
-        result = await session.execute(query)
+        goals = await list_of_goals(session, user_id)
 
-        goals = result.scalars().all()
-# Проверить эту часть
         if goals:
             goals_list = [f'{idx + 1}. {goal.goal}' for idx, goal in enumerate(goals)]
             goals_text = f'\n'.join(goals_list)
 
-            await message.answer(f'Вот список ваших целей:\n{goals_text}\n\n')
-            await message.answer('Введите номер цели, чтобы увидеть подробную информацию')
-            await state.set_state(GoalSelectionState.goal_number)
+            await message.answer(f'Список ваших целей:\n{goals_text}\n\n')
+            await message.answer('Введите номер цели, чтобы увидеть подробную информацию\n')
+            await state.set_state(GoalManagementState.goal_number)
         else:
             await message.answer('У вас пока нет целей\n'
                                  'Чтобы добавить цель введите команду /goal')
             return
 
 
-@router.message(GoalSelectionState.goal_number)
-async def goal_details_handler(message: Message, state:FSMContext):
-    try:
-        number = int(message.text) - 1
-    except ValueError:
-        await message.answer('Пожалуйста, введите корректный номер цели')
+@router.message(GoalManagementState.goal_number)
+async def goal_details_handler(message: Message, state: FSMContext):
+    if message.text.startswith('/'):
+        command = message.text.lower()
+        if command == '/delete':
+            data = await state.get_data()
+            selected_goal_id = data.get('selected_goal_id')
+
+            if selected_goal_id:
+                await goal_current_handler(message, state)
+            else:
+                await goal_delete_handler(message, state)
+                return
+        else:
+            await message.answer('Неверная команда')
+            return
+    else:
+        try:
+            number = int(message.text) - 1
+        except ValueError:
+            await message.answer('Пожалуйста, введите корректный номер цели')
+            return
 
     async with get_session() as session:
         user_id = message.from_user.id
-        goals = await session.execute(
-            select(Mission)
-            .where(Mission.user_id == user_id)
-            .options(selectinload(Mission.payments))
-        )
+        goals = await session.execute(select(Mission)
+                                      .where(Mission.user_id == user_id)
+                                      .options(selectinload(Mission.payments)))
         goals = goals.scalars().all()
 
     if 0 <= number < len(goals):
         selected_goal = goals[number]
         payments = selected_goal.payments
-        goal_info = (
-            f"Цель: {selected_goal.goal}\n"
-            f"Необходимая сумма: {selected_goal.total_amount}\n"
-            f"Накопленная сумма: {selected_goal.saved_amount}\n"
-            f"Месячный доход: {selected_goal.income}\n"
-            f"Период накоплений: {selected_goal.period_payments} месяцев\n"
-        )
-        payment = payments[0]
-        goal_info += (f'Ежемесячный взнос: {payment.amount}\n\n'
-                      f'Вернуться к списку /list'
-                      )
 
-        await message.answer(goal_info)
+        await state.update_data(selected_goal_id=selected_goal.id)
+
+        data = await state.get_data()
+        delete_it = data.get('delete_it', False)
+
+        if delete_it:
+            await message.answer("Вы действительно хотите удалить цель?\n"
+                                 "Введите 'да' для подтверждения")
+            await state.set_state(GoalManagementState.confirm_goal)
+
+        else:
+            goal_info = (
+                f"Цель: {selected_goal.goal}\n"
+                f"Необходимая сумма: {selected_goal.total_amount}\n"
+                f"Накопленная сумма: {selected_goal.saved_amount}\n"
+                f"Месячный доход: {selected_goal.income}\n"
+                f"Период накоплений: {selected_goal.period_payments} месяцев\n"
+            )
+            payment = payments[0]
+            goal_info += (f'Ежемесячный взнос: {payment.amount}\n\n'
+                          f'Чтобы удалить эту цель, введите /delete\n'
+                          f'Вернуться к списку /list\n'
+                          )
+
+            await message.answer(goal_info)
+
     else:
-        await message.answer('Неправильный номер целию Попробуйте снова')
+        await message.answer('Неправильный номер цели\n'
+                             'Попробуйте снова\n')
+
+    # await state.clear()
+
+
+@router.message(Command('delete'))
+async def goal_delete_handler(message: Message, state: FSMContext):
+    async with (get_session() as session):
+        user_id = message.from_user.id
+        goals = await list_of_goals(session, user_id)
+
+        if goals:
+            goals_list = [f'{idx + 1}. {goal.goal}' for idx, goal in enumerate(goals)]
+            goals_text = f'Выберите номер цели, которую хотите удалить:\n' + '\n'.join(goals_list)
+
+            await state.update_data(delete_it=True)
+
+            await message.answer(goals_text)
+            await state.set_state(GoalManagementState.goal_number)
+
+        else:
+            await message.answer('У вас пока нет целей для удаления.')
+
+
+@router.message(GoalManagementState.goal_number)
+async def goal_current_handler(message: Message, state: FSMContext):
+    async with get_session() as session:
+        data = await state.get_data()
+        selected_goal_id = data.get('selected_goal_id')
+        selected_goal = await session.get(Mission, selected_goal_id)
+
+        if selected_goal:
+            await message.answer("Вы действительно хотите удалить цель?\n"
+                                 "Введите 'да' для подтверждения")
+            await state.set_state(GoalManagementState.confirm_goal)
+
+        else:
+            await message.answer('Не удалось найти указанную цель.')
+
+
+@router.message(GoalManagementState.confirm_goal)
+async def delete_confirmation_handler(message: Message, state: FSMContext):
+    confirmation = message.text.lower()
+
+    if confirmation == 'да':
+        async with get_session() as session:
+            data = await state.get_data()
+            selected_goal_id = data.get('selected_goal_id')
+            selected_goal = await session.get(Mission, selected_goal_id)
+
+            if selected_goal:
+                await session.delete(selected_goal)
+                await session.commit()
+                await message.answer('Цель успешно удалена\n\n'
+                                     'Перейти к списку целей /list\n'
+                                     'Добавить новую цель /goal')
+            else:
+                await message.answer('Не удалось найти указанную цель\n'
+                                     'Перейти к списку целей /list')
+
+    else:
+        await message.answer('Удаление цели отменено')
 
     await state.clear()
-
 
 
 #
