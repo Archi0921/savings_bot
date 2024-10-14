@@ -72,6 +72,35 @@ async def list_of_goals(session: AsyncSession, user_id: int):
     goals = result.scalars().all()
     return goals
 
+async def payment_set_is_done(session: AsyncSession, payment_id: int) -> str:
+    payment = await session.scalar(select(Payment).where(Payment.id == payment_id))
+    if not (payment is None):
+        mission = await get_mission_by_id(session, id=payment.mission_id)
+        if not payment.is_done and not (mission is None):
+            mission.saved_amount += payment.amount
+            payment.is_done = True
+            session.add_all([payment, mission])
+            await session.commit()
+            logger.info(f'Изменили payment с id = {payment_id} для пользователя {mission.user_id}')
+            logger.info(f'Изменили миссию с id = {mission.id} для пользователя {mission.user_id}')
+            return "Сумма Ваших накоплений по цели '"+mission.goal+"' составляет "+str(mission.saved_amount)+" из "+str(mission.total_amount)
+    return ""
+
+async def payment_move_in_end(session: AsyncSession, payment_id: int) -> str:
+    payment = await session.scalar(select(Payment).where(Payment.id == payment_id))
+    if not (payment is None):
+        mission = await get_mission_by_id(session, id=payment.mission_id)
+        if not payment.is_done and not (mission is None):
+            last_payment = await session.scalar(select(Payment).where(Payment.mission_id == payment.mission_id).order_by(Payment.date.desc()).limit(1))
+            payment.date = last_payment.date + relativedelta(months=1)
+
+            session.add(payment)
+            await session.commit()
+            logger.info(f'Изменили payment с id = {payment_id} для пользователя {mission.user_id}')
+
+            return "Срок достижения цели '"+mission.goal+"' перенесён на "+payment.date.strftime('%d-%m-%Y')
+    return ""
+
 # async def get_user_by_id(session: AsyncSession, id: int) -> User:
 #     return await session.scalar(select(User).where(User.id == id))
 

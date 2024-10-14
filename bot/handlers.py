@@ -6,6 +6,7 @@ from aiogram.filters import Command, CommandStart
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
+from aiogram import F
 from sqlalchemy.orm import selectinload
 
 from database.database import AsyncSessionLocal as async_session
@@ -302,6 +303,21 @@ async def delete_confirmation_handler(message: Message, state: FSMContext):
         await message.answer('Удаление цели отменено', reply_markup=main_menu_keyboard)
 
     await state.clear()
+
+@router.callback_query(F.data.startswith('saved'))
+async def process_callback_saved(callback_query: types.CallbackQuery):
+    code = callback_query.data.replace('saved_', '')
+    async with get_session() as session:
+        text = await payment_set_is_done(session=session, payment_id=int(code))
+    await callback_query.message.answer(text='Отлично! '+text)
+
+@router.callback_query(F.data.startswith('repayment'))
+async def process_callback_repayment(callback_query: types.CallbackQuery):
+    code = callback_query.data.replace('repayment_', '')
+    async with get_session() as session:
+        text = await payment_move_in_end(session=session, payment_id=int(code))
+    await callback_query.message.answer(text='Готово! '+text)
+
 
 #
 # @router.message(UserMissionState.period_payments)
