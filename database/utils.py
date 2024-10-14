@@ -44,7 +44,7 @@ async def create_payments(session: AsyncSession, mission: Mission, period_paymen
         current_date = datetime.now()
 
         for i in range(period_payments):
-            payment_date = (current_date + relativedelta(months=i)).replace(day=1)
+            payment_date = (current_date + relativedelta(months=i+1)).replace(day=1)
             payment_amount = equal_payment
 
             if i == period_payments - 1:

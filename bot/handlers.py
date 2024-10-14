@@ -8,9 +8,10 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 from sqlalchemy.orm import selectinload
 
-from savings_bot.database.database import AsyncSessionLocal as async_session
-from savings_bot.database.models import *
-from savings_bot.database.utils import *
+from database.database import AsyncSessionLocal as async_session
+from database.models import *
+from database.utils import *
+from .keyboards import *
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -19,6 +20,17 @@ router = Router()
 def register_handlers(dp):
     dp.include_router(router)
 
+@router.message(lambda message: message.text == '🔙 Вернуться к основному меню')
+async def go_back_to_main_menu(message: types.Message, state: FSMContext):
+    await state.clear()
+    await message.answer('Вы вернулись в основное меню:', reply_markup=main_menu_keyboard)
+
+@router.message(lambda message: message.text == '❌ Отменить действие')
+async def stop_state_handler(message: types.Message, state: FSMContext):
+    current_state = await state.get_state()
+    if current_state is not None:
+        await state.clear()
+        await message.answer('Текущий процесс отменён.', reply_markup=main_menu_keyboard)
 
 @asynccontextmanager
 async def get_session() -> AsyncSession:
@@ -27,15 +39,14 @@ async def get_session() -> AsyncSession:
 
 
 @router.message(CommandStart())
-async def cmd_start(message: Message):
+async def cmd_start(message: Message, state: FSMContext):
+    await state.clear()
     async with get_session() as session:
         user = await add_user(session, message.from_user.id, message.from_user.username)
     await message.answer(f'Привет! Это бот для накоплений.\n'
                          'Вам нужно ввести свою цель, сумму, дату, к которой нужно накопить и информацию о доходах\n'
-                         'А я помогу вам рассчитать размер и частоту внесения для достижения цели\n'
-                         'Чтобы начать, отправьте команду /goal\n'
-                         'Чтобы посмотреть список всех целей, введите /list\n'
-                         'Если вы хотите удалить цель, введите /delete\n')
+                         'А я помогу вам рассчитать размер и частоту внесения для достижения цели',
+                         reply_markup=main_menu_keyboard)
 
 
 class UserMissionState(StatesGroup):
@@ -47,12 +58,14 @@ class UserMissionState(StatesGroup):
 
 class GoalManagementState(StatesGroup):
     goal_number = State()
-    confirm_goal = State()
+    delete_goal = State()
+    confirm_delete = State()
 
 
-@router.message(Command('goal'))
+@router.message(lambda message: message.text == '🗒️ Добавить цель')
 async def add_goal(message: Message, state: FSMContext):
-    await message.answer('На что вы планируете копить? Укажите название для вашей цели:')
+    await state.clear()
+    await message.answer('На что вы планируете копить? Укажите название для вашей цели:', reply_markup=stop_state_keyboard)
     await state.set_state(UserMissionState.goal)
 
 
@@ -70,7 +83,7 @@ async def goal_handler(message: Message, state: FSMContext):
             return
 
         await state.update_data(goal=goal)
-        await message.answer('Какую сумму вы хотите накопить? Введите число:')
+        await message.answer('Какую сумму вы хотите накопить? Введите число:', reply_markup=stop_state_keyboard)
         await state.set_state(UserMissionState.total_amount)
 
 
@@ -80,7 +93,7 @@ async def total_amount_handler(message: Message, state: FSMContext):
         total_amount = int(message.text)
         await state.update_data(total_amount=total_amount)
 
-        await message.answer('Какова ваша месячная зарплата?')
+        await message.answer('Какова ваша месячная зарплата?', reply_markup=stop_state_keyboard)
         await state.set_state(UserMissionState.income)
     except ValueError:
         await message.answer('Пожалуйста, укажите сумму вашей цели числом:')
@@ -92,7 +105,7 @@ async def income_handler(message: Message, state: FSMContext):
         income = int(message.text)
         await state.update_data(income=income)
 
-        await message.answer('Какой процент от зарплаты вы готовы откладывать ежемесячно?')
+        await message.answer('Какой процент от зарплаты вы готовы откладывать ежемесячно?', reply_markup=stop_state_keyboard)
         await state.set_state(UserMissionState.savings_percentage)
     except ValueError:
         await message.answer('Сумму дохода необходимо указать числом:')
@@ -145,9 +158,7 @@ async def savings_percentage_handler(message: Message, state: FSMContext):
                 f"Месячный доход: {income}\n"
                 f"Процент откладывания: {savings_percentage}%\n"
                 f"Период накоплений: {period_payments} месяцев\n"
-                f"Ежемесячный взнос: {equal_payment}\n\n"
-                f"Чтобы посмотреть список всех целей, введите /list\n"
-                f"Чтобы добавить еще цель, введите /goal\n"
+                f"Ежемесячный взнос: {equal_payment}\n\n", reply_markup=main_menu_keyboard
             )
 
             await state.clear()
@@ -155,8 +166,9 @@ async def savings_percentage_handler(message: Message, state: FSMContext):
             await message.answer('Процент дохода необходимо указать числом:')
 
 
-@router.message(Command('list'))
+@router.message(lambda message: message.text == '💭 Посмотреть все цели')
 async def goals_list_handler(message: Message, state: FSMContext):
+    await state.clear()
     async with (get_session() as session):
         user_id = message.from_user.id
         goals = await list_of_goals(session, user_id)
@@ -166,36 +178,31 @@ async def goals_list_handler(message: Message, state: FSMContext):
             goals_text = f'\n'.join(goals_list)
 
             await message.answer(f'Список ваших целей:\n{goals_text}\n\n')
-            await message.answer('Введите номер цели, чтобы увидеть подробную информацию\n')
+            await message.answer('Введите номер цели, чтобы увидеть подробную информацию')
             await state.set_state(GoalManagementState.goal_number)
         else:
-            await message.answer('У вас пока нет целей\n'
-                                 'Чтобы добавить цель введите команду /goal')
+            await message.answer('У вас пока нет целей', reply_markup=main_menu_keyboard)
             return
 
 
 @router.message(GoalManagementState.goal_number)
 async def goal_details_handler(message: Message, state: FSMContext):
-    if message.text.startswith('/'):
-        command = message.text.lower()
-        if command == '/delete':
-            data = await state.get_data()
-            selected_goal_id = data.get('selected_goal_id')
+    if message.text == "❌ Удалить цель":
+        data = await state.get_data()
+        selected_goal_id = data.get('selected_goal_id')
 
-            if selected_goal_id:
-                await goal_current_handler(message, state)
-            else:
-                await goal_delete_handler(message, state)
-                return
+        if selected_goal_id:
+            await state.set_state(GoalManagementState.confirm_delete)
+            await goal_current_handler(message, state)
+            return
         else:
-            await message.answer('Неверная команда')
+            await goal_delete_handler(message, state)
             return
-    else:
-        try:
-            number = int(message.text) - 1
-        except ValueError:
-            await message.answer('Пожалуйста, введите корректный номер цели')
-            return
+    try:
+        number = int(message.text) - 1
+    except ValueError:
+        await message.answer('Пожалуйста, введите корректный номер цели')
+        return
 
     async with get_session() as session:
         user_id = message.from_user.id
@@ -216,7 +223,7 @@ async def goal_details_handler(message: Message, state: FSMContext):
         if delete_it:
             await message.answer("Вы действительно хотите удалить цель?\n"
                                  "Введите 'да' для подтверждения")
-            await state.set_state(GoalManagementState.confirm_goal)
+            await state.set_state(GoalManagementState.confirm_delete)
 
         else:
             goal_info = (
@@ -227,22 +234,21 @@ async def goal_details_handler(message: Message, state: FSMContext):
                 f"Период накоплений: {selected_goal.period_payments} месяцев\n"
             )
             payment = payments[0]
-            goal_info += (f'Ежемесячный взнос: {payment.amount}\n\n'
-                          f'Чтобы удалить эту цель, введите /delete\n'
-                          f'Вернуться к списку /list\n'
+            goal_info += (f'Ежемесячный взнос: {payment.amount}'
                           )
 
-            await message.answer(goal_info)
+            await message.answer(goal_info, reply_markup=list_keyboard)
 
     else:
         await message.answer('Неправильный номер цели\n'
-                             'Попробуйте снова\n')
+                             'Попробуйте снова')
 
     # await state.clear()
 
 
-@router.message(Command('delete'))
+@router.message(lambda message: message.text == '❌ Удалить цель')
 async def goal_delete_handler(message: Message, state: FSMContext):
+    await state.clear()
     async with (get_session() as session):
         user_id = message.from_user.id
         goals = await list_of_goals(session, user_id)
@@ -270,16 +276,15 @@ async def goal_current_handler(message: Message, state: FSMContext):
         if selected_goal:
             await message.answer("Вы действительно хотите удалить цель?\n"
                                  "Введите 'да' для подтверждения")
-            await state.set_state(GoalManagementState.confirm_goal)
+            await state.set_state(GoalManagementState.confirm_delete)
 
         else:
-            await message.answer('Не удалось найти указанную цель.')
+            await message.answer('Не удалось найти указанную цель.', reply_markup=main_menu_keyboard)
 
 
-@router.message(GoalManagementState.confirm_goal)
+@router.message(GoalManagementState.confirm_delete)
 async def delete_confirmation_handler(message: Message, state: FSMContext):
     confirmation = message.text.lower()
-
     if confirmation == 'да':
         async with get_session() as session:
             data = await state.get_data()
@@ -289,18 +294,14 @@ async def delete_confirmation_handler(message: Message, state: FSMContext):
             if selected_goal:
                 await session.delete(selected_goal)
                 await session.commit()
-                await message.answer('Цель успешно удалена\n\n'
-                                     'Перейти к списку целей /list\n'
-                                     'Добавить новую цель /goal')
+                await message.answer('Цель успешно удалена', reply_markup=main_menu_keyboard)
             else:
-                await message.answer('Не удалось найти указанную цель\n'
-                                     'Перейти к списку целей /list')
+                await message.answer('Не удалось найти указанную цель', reply_markup=main_menu_keyboard)
 
     else:
-        await message.answer('Удаление цели отменено')
+        await message.answer('Удаление цели отменено', reply_markup=main_menu_keyboard)
 
     await state.clear()
-
 
 #
 # @router.message(UserMissionState.period_payments)
