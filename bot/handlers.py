@@ -13,7 +13,7 @@ from database.database import AsyncSessionLocal as async_session
 from database.models import *
 from database.utils import *
 from .keyboards import *
-from .scheduler import add_test_jobs
+from .scheduler import add_test_jobs, add_work_jobs
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -319,9 +319,13 @@ async def process_callback_repayment(callback_query: types.CallbackQuery):
         text = await payment_move_in_end(session=session, payment_id=int(code))
     await callback_query.message.answer(text='Готово! '+text)
 
-@router.message(lambda message: message.text == 'test start')
+@router.message(lambda message: message.text == '/test_start')
 async def test_start_handler(message: Message, state: FSMContext):
-    add_test_jobs(bot=bot)
+    add_test_jobs(bot=message.bot)
+
+@router.message(lambda message: message.text == '/test_stop')
+async def test_start_handler(message: Message, state: FSMContext):
+    add_work_jobs(bot=message.bot)
 
 #
 # @router.message(UserMissionState.period_payments)

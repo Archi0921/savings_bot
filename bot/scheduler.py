@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from dateutil.relativedelta import relativedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from aiogram import Bot
@@ -12,33 +13,34 @@ import logging
 
 from database.utils import get_mission_by_id
 
-
 scheduler = AsyncIOScheduler()
 
 def set_scheduled_jobs(bot):
+
     add_work_jobs(bot)
-    scheduler.start(bot)
+    scheduler.start()
 
 def add_test_jobs(bot):
-
-    # scheduler.remove_all_jobs()
-    scheduler.add_job(send_schedules, "cron", hour="*", minute="*", args=(bot,))
+    logging.info('Set test mode for schedules')
+    scheduler.remove_all_jobs()
+    scheduler.add_job(send_schedules, "cron", hour="*", minute="*", args=(bot, True, ))
 
 def add_work_jobs(bot):
-    # scheduler.remove_all_jobs()
+    scheduler.remove_all_jobs()
+    logging.info('Set work mode for schedules')
+    scheduler.add_job(send_schedules, "cron", day=1, hour=12, minute=0, args=(bot, False, ))
+    scheduler.add_job(send_schedules, "cron", day=10, hour=12, minute=0, args=(bot, False, ))
+    scheduler.add_job(send_schedules, "cron", day=20, hour=12, minute=0, args=(bot, False, ))
 
-    scheduler.add_job(send_schedules, "cron", day=1, hour=12, minute=0, args=(bot, ))
-    scheduler.add_job(send_schedules, "cron", day=10, hour=12, minute=0, args=(bot, ))
-    scheduler.add_job(send_schedules, "cron", day=20, hour=12, minute=0, args=(bot, ))
 
 @asynccontextmanager
 async def get_session() -> AsyncSession:
     async with async_session() as session:
         yield session
 
-async def send_schedules(bot: Bot):
+async def send_schedules(bot: Bot, test_mode: bool):
 
-    first_day_current_month = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    first_day_current_month = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0) + (relativedelta(months=1) if test_mode else relativedelta(months=0))
     second_day_current_month = first_day_current_month.replace(day=2)
     logging.info('Start send schedules')
 
