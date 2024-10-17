@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from aiogram import Bot
@@ -12,14 +13,23 @@ import logging
 from database.utils import get_mission_by_id
 
 
-def set_scheduled_jobs(scheduler, bot):
-    # тестовая задача, следующую строку необходимо закомментить в рабочем варианте
-    scheduler.add_job(send_schedules, "cron", hour ="*", minute = "*", args=(bot, ))
-    #задачи, которые надо раскомментировать для рабочего варианта
-    # scheduler.add_job(send_schedules, "cron", day=1, hour=12, minute=0, args=(bot, ))
-    # scheduler.add_job(send_schedules, "cron", day=10, hour=12, minute=0, args=(bot, ))
-    # scheduler.add_job(send_schedules, "cron", day=20, hour=12, minute=0, args=(bot, ))
+scheduler = AsyncIOScheduler()
 
+def set_scheduled_jobs(bot):
+    add_work_jobs(bot)
+    scheduler.start(bot)
+
+def add_test_jobs(bot):
+
+    # scheduler.remove_all_jobs()
+    scheduler.add_job(send_schedules, "cron", hour="*", minute="*", args=(bot,))
+
+def add_work_jobs(bot):
+    # scheduler.remove_all_jobs()
+
+    scheduler.add_job(send_schedules, "cron", day=1, hour=12, minute=0, args=(bot, ))
+    scheduler.add_job(send_schedules, "cron", day=10, hour=12, minute=0, args=(bot, ))
+    scheduler.add_job(send_schedules, "cron", day=20, hour=12, minute=0, args=(bot, ))
 
 @asynccontextmanager
 async def get_session() -> AsyncSession:
