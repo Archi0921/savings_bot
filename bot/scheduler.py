@@ -23,7 +23,7 @@ def set_scheduled_jobs(bot):
 def add_test_jobs(bot):
     logging.info('Set test mode for schedules')
     scheduler.remove_all_jobs()
-    scheduler.add_job(send_schedules, "cron", hour="*", minute="*", args=(bot, True, ))
+    scheduler.add_job(send_schedules, "interval", seconds=5, args=(bot, True, ))
 
 def add_work_jobs(bot):
     scheduler.remove_all_jobs()
