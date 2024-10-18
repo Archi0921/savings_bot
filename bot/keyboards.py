@@ -6,6 +6,8 @@ list_mission_button = KeyboardButton(text='💭 Посмотреть все це
 delete_mission_button = KeyboardButton(text='❌ Удалить цель')
 back_to_main_menu_button = KeyboardButton(text='🔙 Вернуться к основному меню')
 stop_state_button = KeyboardButton(text='❌ Отменить действие')
+agree_confirmation_button = InlineKeyboardButton(text='Сохранить данные', callback_data='confirm_save')
+disagree_confirmation_button = InlineKeyboardButton(text='Не сохранять', callback_data='cancel_save')
 
 main_menu_keyboard = ReplyKeyboardMarkup(
     keyboard=[
@@ -27,11 +29,16 @@ list_keyboard = ReplyKeyboardMarkup(
 
 stop_state_keyboard = ReplyKeyboardMarkup(resize_keyboard=True, keyboard=[[stop_state_button]])
 
+confirmation_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+    [agree_confirmation_button, disagree_confirmation_button]
+])
+
+
 def create_schedule_kb(payment_id: int) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
 
-    builder.row(InlineKeyboardButton(text="Положил в копилку ", callback_data="saved_"+str(payment_id)))
-    builder.row(InlineKeyboardButton(text="Перенести платёж \nи увеличить срок накопления", callback_data="repayment_"+str(payment_id)))
+    builder.row(InlineKeyboardButton(text="Положил в копилку ", callback_data="saved_" + str(payment_id)))
+    builder.row(InlineKeyboardButton(text="Перенести платёж\nи увеличить срок накопления",
+                                     callback_data="repayment_" + str(payment_id)))
     builder.adjust(1)
     return builder.as_markup()
-

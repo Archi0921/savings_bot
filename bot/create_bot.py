@@ -1,7 +1,6 @@
 import logging
 import os
 
-
 from .handlers import register_handlers
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage

@@ -1,4 +1,3 @@
-import math
 from datetime import datetime
 from typing import Optional
 from dateutil.relativedelta import relativedelta
@@ -38,13 +37,15 @@ async def add_mission(session: AsyncSession, user_id: int, goal: str,
     return mission
 
 
-async def create_payments(session: AsyncSession, mission: Mission, period_payments: int, equal_payment: int, remainder: int):
+async def create_payments(session: AsyncSession, mission: Mission, period_payments: int, equal_payment: int,
+                          remainder: int):
     async with session.begin():
         payments = []
         current_date = datetime.now()
+        first_payment_date = (current_date + relativedelta(months=1)).replace(day=1)
 
         for i in range(period_payments):
-            payment_date = (current_date + relativedelta(months=i+1)).replace(day=1)
+            payment_date = first_payment_date + relativedelta(months=i)
             payment_amount = equal_payment
 
             if i == period_payments - 1:
@@ -72,6 +73,7 @@ async def list_of_goals(session: AsyncSession, user_id: int):
     goals = result.scalars().all()
     return goals
 
+
 async def payment_set_is_done(session: AsyncSession, payment_id: int) -> str:
     payment = await session.scalar(select(Payment).where(Payment.id == payment_id))
     if not (payment is None):
@@ -83,22 +85,25 @@ async def payment_set_is_done(session: AsyncSession, payment_id: int) -> str:
             await session.commit()
             logger.info(f'Изменили payment с id = {payment_id} для пользователя {mission.user_id}')
             logger.info(f'Изменили миссию с id = {mission.id} для пользователя {mission.user_id}')
-            return "Сумма Ваших накоплений по цели '"+mission.goal+"' составляет "+str(mission.saved_amount)+" из "+str(mission.total_amount)
+            return "Сумма Ваших накоплений по цели '" + mission.goal + "' составляет " + str(
+                mission.saved_amount) + " из " + str(mission.total_amount)
     return ""
+
 
 async def payment_move_in_end(session: AsyncSession, payment_id: int) -> str:
     payment = await session.scalar(select(Payment).where(Payment.id == payment_id))
     if not (payment is None):
         mission = await get_mission_by_id(session, id=payment.mission_id)
         if not payment.is_done and not (mission is None):
-            last_payment = await session.scalar(select(Payment).where(Payment.mission_id == payment.mission_id).order_by(Payment.date.desc()).limit(1))
+            last_payment = await session.scalar(
+                select(Payment).where(Payment.mission_id == payment.mission_id).order_by(Payment.date.desc()).limit(1))
             payment.date = last_payment.date + relativedelta(months=1)
 
             session.add(payment)
             await session.commit()
             logger.info(f'Изменили payment с id = {payment_id} для пользователя {mission.user_id}')
 
-            return "Срок достижения цели '"+mission.goal+"' перенесён на "+payment.date.strftime('%d-%m-%Y')
+            return "Срок достижения цели '" + mission.goal + "' перенесён на " + payment.date.strftime('%d-%m-%Y')
     return ""
 
 # async def get_user_by_id(session: AsyncSession, id: int) -> User:
