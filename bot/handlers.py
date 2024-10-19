@@ -7,6 +7,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 from aiogram import F
+from sqlalchemy import func
 from sqlalchemy.orm import selectinload
 
 from database.database import AsyncSessionLocal as async_session
@@ -87,8 +88,9 @@ async def get_session() -> AsyncSession:
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext):
     await state.clear()
-    async with get_session() as session:
-        user = await add_user(session, message.from_user.id, message.from_user.username)
+    async with (get_session() as session):
+        #user =
+        await add_user(session, message.from_user.id, message.from_user.username)
     await message.answer(f'Привет! Это бот для накоплений.\n'
                          'Вам нужно ввести свою цель, сумму, дату, к которой нужно накопить и информацию о доходах\n'
                          'А я помогу вам рассчитать размер и частоту внесения для достижения цели',
@@ -119,15 +121,18 @@ async def add_goal(message: Message, state: FSMContext):
 @router.message(UserMissionState.goal)
 async def goal_handler(message: Message, state: FSMContext):
     async with get_session() as session:
-        goal = message.text.lower()
+        goal = message.text.strip()
         user_id = message.from_user.id
 
-        existing_mission_query = select(Mission).where(Mission.user_id == user_id, Mission.goal == goal)
-        existing_mission = await session.scalar(existing_mission_query)
+        lower_goal = goal.lower()
 
-        if existing_mission is not None:
-            await message.answer('У вас уже есть цель с таким названием. Пожалуйста, введите другое название:')
-            return
+        existing_mission_query = select(Mission).where(Mission.user_id == user_id)
+        existing_mission = await session.scalars(existing_mission_query)
+
+        for mission in existing_mission:
+            if mission.goal.lower() == lower_goal:
+                await message.answer('У вас уже есть цель с таким названием. Пожалуйста, введите другое название:')
+                return
 
         await state.update_data(goal=goal)
         await message.answer('Какую сумму вы хотите накопить? Введите число:', reply_markup=stop_state_keyboard)
