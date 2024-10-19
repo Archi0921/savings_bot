@@ -119,7 +119,7 @@ async def add_goal(message: Message, state: FSMContext):
 @router.message(UserMissionState.goal)
 async def goal_handler(message: Message, state: FSMContext):
     async with get_session() as session:
-        goal = message.text
+        goal = message.text.lower()
         user_id = message.from_user.id
 
         existing_mission_query = select(Mission).where(Mission.user_id == user_id, Mission.goal == goal)
